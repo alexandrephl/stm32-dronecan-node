@@ -1,0 +1,9 @@
+../BSP/bsp.c:16:6:BSP_Init	1
+../BSP/bsp.c:25:6:BSP_LED_Init	1
+../BSP/bsp.c:43:6:BSP_LED_On	1
+../BSP/bsp.c:47:6:BSP_LED_Off	1
+../BSP/bsp.c:51:6:BSP_LED_Toggle	1
+../BSP/bsp.c:58:6:BSP_UART_Init	1
+../BSP/bsp.c:72:6:BSP_UART_Send	1
+../BSP/bsp.c:79:6:BSP_Button_Init	1
+../BSP/bsp.c:96:6:HAL_GPIO_EXTI_Callback	2

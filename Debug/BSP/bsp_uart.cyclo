@@ -1,4 +1,0 @@
-../BSP/bsp_uart.c:11:6:BSP_UART_Init	1
-../BSP/bsp_uart.c:17:6:BSP_UART_SendChar	1
-../BSP/bsp_uart.c:21:6:BSP_UART_Send	1
-../BSP/bsp_uart.c:25:6:BSP_UART_SendString	2

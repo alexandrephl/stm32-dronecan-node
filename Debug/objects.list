@@ -1,6 +1,4 @@
-"./BSP/bsp_i2c.o"
-"./BSP/bsp_led.o"
-"./BSP/bsp_uart.o"
+"./BSP/bsp.o"
 "./Core/Src/main.o"
 "./Core/Src/stm32f4xx_hal_msp.o"
 "./Core/Src/stm32f4xx_it.o"

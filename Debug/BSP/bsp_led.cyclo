@@ -1,4 +1,0 @@
-../BSP/bsp_led.c:11:6:BSP_LED_Init	1
-../BSP/bsp_led.c:37:6:BSP_LED_On	1
-../BSP/bsp_led.c:41:6:BSP_LED_Off	1
-../BSP/bsp_led.c:45:6:BSP_LED_Toggle	1
