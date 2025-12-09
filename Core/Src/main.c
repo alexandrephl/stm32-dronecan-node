@@ -18,12 +18,14 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "cmsis_os.h"
+
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "bsp.h"
-
-
+#include <stdio.h>
+#include <string.h>
 
 /* USER CODE END Includes */
 
@@ -42,7 +44,14 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+I2C_HandleTypeDef hi2c1;
+UART_HandleTypeDef huart2;
 
+osThreadId LedTaskHandle;
+osThreadId SensorTaskHandle;
+osThreadId LoggerTaskHandle;
+
+QueueHandle_t sensorQueue;
 
 /* USER CODE BEGIN PV */
 
@@ -50,6 +59,10 @@
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
+void StartLedTask(void const * argument);
+void StartSensorTask(void const * argument);
+void StartLoggerTask(void const * argument);
+
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -86,12 +99,55 @@ int main(void)
 
   /* USER CODE END SysInit */
 
+  /* Initialize all configured peripherals */
 
   /* USER CODE BEGIN 2 */
   /* board support package code initialization */
   BSP_Init();
 
+
   /* USER CODE END 2 */
+
+  /* USER CODE BEGIN RTOS_MUTEX */
+  /* add mutexes, ... */
+  /* USER CODE END RTOS_MUTEX */
+
+  /* USER CODE BEGIN RTOS_SEMAPHORES */
+  /* add semaphores, ... */
+  /* USER CODE END RTOS_SEMAPHORES */
+
+  /* USER CODE BEGIN RTOS_TIMERS */
+  /* start timers, add new ones, ... */
+  /* USER CODE END RTOS_TIMERS */
+
+  /* USER CODE BEGIN RTOS_QUEUES */
+  sensorQueue = xQueueCreate(4, sizeof(char)*64);
+  if (sensorQueue == NULL) {
+      Error_Handler();
+  }
+  /* USER CODE END RTOS_QUEUES */
+
+  /* Create the thread(s) */
+  /* definition and creation of LedTask */
+  osThreadDef(LedTask, StartLedTask, osPriorityLow, 0, 128);
+  LedTaskHandle = osThreadCreate(osThread(LedTask), NULL);
+
+  /* definition and creation of SensorTask */
+  osThreadDef(SensorTask, StartSensorTask, osPriorityNormal, 0, 256);
+  SensorTaskHandle = osThreadCreate(osThread(SensorTask), NULL);
+
+  /* definition and creation of LoggerTask */
+  osThreadDef(LoggerTask, StartLoggerTask, osPriorityBelowNormal, 0, 256);
+  LoggerTaskHandle = osThreadCreate(osThread(LoggerTask), NULL);
+
+  /* USER CODE BEGIN RTOS_THREADS */
+  /* add threads, ... */
+  /* USER CODE END RTOS_THREADS */
+
+  /* Start scheduler */
+  osKernelStart();
+
+  /* We should never get here as control is now taken by the scheduler */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
@@ -99,6 +155,7 @@ int main(void)
   {
 
     /* USER CODE END WHILE */
+
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
@@ -151,12 +208,85 @@ void SystemClock_Config(void)
   }
 }
 
-
-
-
 /* USER CODE BEGIN 4 */
 
 /* USER CODE END 4 */
+
+/* USER CODE BEGIN Header_StartLedTask */
+/**
+  * @brief  Function implementing the LedTask thread.
+  * @param  argument: Not used
+  * @retval None
+  */
+/* USER CODE END Header_StartLedTask */
+void StartLedTask(void const * argument)
+{
+  /* USER CODE BEGIN 5 */
+  /* Infinite loop */
+  for(;;)
+  {
+      BSP_LED_Toggle();
+      osDelay(500);
+  }
+  /* USER CODE END 5 */
+}
+
+/* USER CODE BEGIN Header_StartSensorTask */
+/**
+* @brief Function implementing the SensorTask thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartSensorTask */
+void StartSensorTask(void const * argument)
+{
+  /* USER CODE BEGIN StartSensorTask */
+    char msg[64];
+
+    for(;;)
+    {
+        float temperature = 0.0f;
+        float pressure    = 0.0f;
+
+        if (BMP280_ReadValues(&temperature, &pressure) == HAL_OK)
+        {
+            snprintf(msg, sizeof(msg),
+                     "T=%.2f°C  P=%.2f hPa\n",
+                     temperature, pressure);
+
+            xQueueSend(sensorQueue, msg, 0);
+        }
+        else {
+            snprintf(msg, sizeof(msg), "BMP280 ERROR\n");
+            xQueueSend(sensorQueue, msg, 0);
+        }
+
+        osDelay(1000);
+    }
+  /* USER CODE END StartSensorTask */
+}
+
+/* USER CODE BEGIN Header_StartLoggerTask */
+/**
+* @brief Function implementing the LoggerTask thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartLoggerTask */
+void StartLoggerTask(void const * argument)
+{
+  /* USER CODE BEGIN StartLoggerTask */
+    char msg[64];
+
+    for(;;)
+    {
+        if (xQueueReceive(sensorQueue, msg, portMAX_DELAY) == pdTRUE)
+        {
+            BSP_UART_Send((uint8_t*)msg, strlen(msg));
+        }
+    }
+  /* USER CODE END StartLoggerTask */
+}
 
 /**
   * @brief  This function is executed in case of error occurrence.
