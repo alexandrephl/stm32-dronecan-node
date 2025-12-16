@@ -17,11 +17,22 @@
 #define BMP280_REG_CONFIG 0xF5
 
 #define BMP280_REG_TEMP_MSB 0xFA
+#define BMP280_REG_PRESS_MSB   0xF7
 
 typedef struct {
     uint16_t dig_T1;
     int16_t  dig_T2;
     int16_t  dig_T3;
+
+    uint16_t dig_P1;
+    int16_t  dig_P2;
+    int16_t  dig_P3;
+    int16_t  dig_P4;
+    int16_t  dig_P5;
+    int16_t  dig_P6;
+    int16_t  dig_P7;
+    int16_t  dig_P8;
+    int16_t  dig_P9;
 } BMP280_Calib;
 
 typedef struct {
@@ -31,5 +42,6 @@ typedef struct {
 
 uint8_t BMP280_Init(BMP280 *dev);
 uint8_t BMP280_ReadTemperature(BMP280 *dev, float *temperature);
+uint8_t BMP280_ReadValues(BMP280 *dev, float *temperature, float *pressure);
 
 #endif /* BMP280_H_ */

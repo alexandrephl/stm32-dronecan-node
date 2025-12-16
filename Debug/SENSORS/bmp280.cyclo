@@ -1,4 +1,6 @@
-../SENSORS/bmp280.c:12:16:bmp280_read8	1
-../SENSORS/bmp280.c:19:17:bmp280_read16	1
-../SENSORS/bmp280.c:26:9:BMP280_Init	2
-../SENSORS/bmp280.c:44:9:BMP280_ReadTemperature	2
+../SENSORS/bmp280.c:14:16:bmp280_read8	1
+../SENSORS/bmp280.c:21:17:bmp280_read16	1
+../SENSORS/bmp280.c:28:9:BMP280_Init	2
+../SENSORS/bmp280.c:56:9:BMP280_ReadTemperature	2
+../SENSORS/bmp280.c:80:9:BMP280_ReadPressure	3
+../SENSORS/bmp280.c:111:9:BMP280_ReadValues	3
