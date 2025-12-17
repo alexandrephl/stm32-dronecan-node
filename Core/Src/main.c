@@ -348,6 +348,17 @@ void StartCanTask(void const * argument)
     SensorData_t *shared = (SensorData_t *)argument;
     SensorData_t local;   // local copy (stack)
 
+    uint8_t txData[8];
+
+    CAN_TxHeaderTypeDef header = {
+        .StdId = 0x100,
+        .IDE   = CAN_ID_STD,
+        .RTR   = CAN_RTR_DATA,
+        .DLC   = 8
+    };
+
+    uint32_t mailbox;
+
     for (;;)
     {
         osMutexWait(shared->mutex, osWaitForever);
@@ -356,15 +367,30 @@ void StartCanTask(void const * argument)
 
         if (local.valid)
         {
-            char msg[64];
+        	int16_t temp = (int16_t)(local.temperature_c * 100);
+        	uint16_t pres = (uint16_t)(local.pressure_hpa * 10);
+        	uint32_t ts = local.timestamp_ms;
+
+            txData[0] = temp >> 8;
+            txData[1] = temp & 0xFF;
+            txData[2] = pres >> 8;
+            txData[3] = pres & 0xFF;
+            txData[4] = ts >> 24;
+            txData[5] = ts >> 16;
+            txData[6] = ts >> 8;
+            txData[7] = ts & 0xFF;
+
+            /*char msg[64];
             snprintf(msg, sizeof(msg),
                      "[CAN] T=%.2f P=%.2f ts=%lu\r\n",
                      local.temperature_c,
                      local.pressure_hpa,
                      local.timestamp_ms);
 
-            BSP_UART_Send((uint8_t*)msg, strlen(msg));
+            BSP_UART_Send((uint8_t*)msg, strlen(msg));*/
         }
+
+        HAL_CAN_AddTxMessage(&hcan1, &header, txData, &mailbox);
 
         osDelay(2000);
     }

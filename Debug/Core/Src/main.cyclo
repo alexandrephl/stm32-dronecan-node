@@ -3,4 +3,4 @@
 ../Core/Src/main.c:247:13:MX_CAN1_Init	2
 ../Core/Src/main.c:312:6:StartSensorTask	2
 ../Core/Src/main.c:346:6:StartCanTask	2
-../Core/Src/main.c:408:6:Error_Handler	1
+../Core/Src/main.c:434:6:Error_Handler	1
