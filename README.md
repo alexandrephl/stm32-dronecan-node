@@ -81,3 +81,8 @@ The CanTask publishes:
 	- Main application code: MIT
 	- Third-party: 
 		libcanard / DroneCAN stack: see submodule license inside Middlewares/libcanard/
+
+## Author
+**Alexandre Panhaleux**  
+Embedded Software Engineer  
+[GitHub: @alexandrephl](https://github.com/alexandrephl)
