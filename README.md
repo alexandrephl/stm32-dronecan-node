@@ -13,22 +13,22 @@ The firmware uses **CMSIS-RTOS (FreeRTOS)**, a small **BSP layer** to isolate HA
 
 ## Repository Layout
 
-|
-├── BSP/                          # Board Support Package (HAL wrapper: UART/I2C/CAN/LED)
-|
-├── Core/
-|   ├── Inc/                      # Application headers (main, dronecan)
-|   └── Src/                      # Application sources (tasks + DroneCAN publisher)
-|
-├── Drivers/
-|   ├── CMSIS/                      # CMSIS core headers
-|   └── STM32F4xx_HAL_Driver/       # to be added
-|
-├── SENSORS/                      # BMP280 driver (compensation + engineering units)
-|
-├── Middlewares/
-|   └── libcanard/                # DroneCAN stack (git submodule)
-|   └── Third party/              # Free RTOS stack
+|  
+├── BSP/                          # Board Support Package (HAL wrapper: UART/I2C/CAN/LED)  
+|  
+├── Core/  
+|   ├── Inc/                      # Application headers (main, dronecan)  
+|   └── Src/                      # Application sources (tasks + DroneCAN publisher)  
+|  
+├── Drivers/  
+|   ├── CMSIS/                      # CMSIS core headers  
+|   └── STM32F4xx_HAL_Driver/       # to be added  
+|  
+├── SENSORS/                      # BMP280 driver (compensation + engineering units)  
+|  
+├── Middlewares/  
+|   └── libcanard/                # DroneCAN stack (git submodule)  
+|   └── Third party/              # Free RTOS stack  
 
 
 ---
