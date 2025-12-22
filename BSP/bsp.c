@@ -1,19 +1,40 @@
-/*
- * bsp.c
- *
- *  Created on: Dec 5, 2025
- *      Author: alexandrepanhaleux
- */
+/******************************************************************************
+* @file    bsp.c
+* @brief   Board Support Package
+*
+*          Provides low-level hardware abstraction for:
+*            - CAN
+*            - I2C
+*            - UART
+*            - LEDs and board-specific peripherals
+*
+*          This layer isolates STM32 HAL usage from the application logic.
+*
+* @board   Custom STM32F446RE board
+* @author  Alexandre Panhaleux
+******************************************************************************/
 
 #include "bsp.h"
 #include <stdio.h>
 #include <string.h>
+#include "main.h"
 
+/* External peripherals handles */
+extern CAN_HandleTypeDef hcan1;
+extern UART_HandleTypeDef huart2;
+extern I2C_HandleTypeDef hi2c1;
+
+/* Private define ------------------------------------------------------------*/
 #define BMP280_ADDR  0x76   // SDO = GND -> addr 0x76
 
-// ======================
-//       BSP INIT
-// ======================
+/* BSP INIT ------------------------------------------------------------------*/
+
+/**
+* @brief Initializes all board-level peripherals.
+*
+* @param None
+* @retval None
+*/
 void BSP_Init(void) {
     BSP_LED_Init();
     BSP_UART_Init();
@@ -21,16 +42,21 @@ void BSP_Init(void) {
     BSP_I2C_Init();
 }
 
-// ======================
-//        LED
-// ======================
+/* LED -----------------------------------------------------------------------*/
+
+/**
+* @brief Initializes the onboard LED GPIO.
+*
+* @param None
+* @retval None
+*/
 void BSP_LED_Init(void) {
 
     GPIO_InitTypeDef GPIO_InitStruct = {0};
-	  /* GPIO Ports Clock Enable */
+    /* Enable GPIO clock for LED pin */
     __HAL_RCC_GPIOA_CLK_ENABLE();
 
-	/*Configure GPIO pin : LD2_Pin */
+    /* Configure LED pin as push-pull output */
 	GPIO_InitStruct.Pin = GPIO_PIN_5;
 	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
 	GPIO_InitStruct.Pull = GPIO_NOPULL;
@@ -40,27 +66,44 @@ void BSP_LED_Init(void) {
 
 }
 
+/**
+* @brief Turns the LED on.
+*/
 void BSP_LED_On(void) {
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
 }
 
+/**
+* @brief Turns the LED off.
+*/
 void BSP_LED_Off(void) {
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
 }
 
+/**
+* @brief Toggles the LED state.
+*/
 void BSP_LED_Toggle(void) {
     HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
 }
 
-// ======================
-//        UART
-// ======================
+/* UART ----------------------------------------------------------------------*/
+
+/**
+* @brief Initializes UART used for debug output.
+*
+* @param None
+* @retval None
+*/
 void BSP_UART_Init(void) {
 
+	GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+	/* Enable clocks for GPIO and USART2 */
     __HAL_RCC_USART2_CLK_ENABLE();
     __HAL_RCC_GPIOA_CLK_ENABLE();
 
-    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    /* Configure UART TX/RX pins */
     GPIO_InitStruct.Pin       = GPIO_PIN_2 | GPIO_PIN_3;
     GPIO_InitStruct.Mode      = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull      = GPIO_PULLUP;
@@ -68,6 +111,7 @@ void BSP_UART_Init(void) {
     GPIO_InitStruct.Alternate = GPIO_AF7_USART2;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
+    /* Configure UART peripheral */
     huart2.Instance = USART2;
     huart2.Init.BaudRate = 115200;
     huart2.Init.WordLength = UART_WORDLENGTH_8B;
@@ -78,57 +122,90 @@ void BSP_UART_Init(void) {
     HAL_UART_Init(&huart2);
 }
 
+/**
+* @brief Sends data over UART.
+*
+* @param data Pointer to data buffer
+* 		 len  Number of bytes to send
+* @retval None
+*/
 void BSP_UART_Send(const uint8_t *data, uint16_t len) {
+	/* Blocking transmit is acceptable for debug output */
     HAL_UART_Transmit(&huart2, (uint8_t*)data, len, HAL_MAX_DELAY);
 }
 
-// ======================
-//        Button
-// ======================
+/* BUTTON --------------------------------------------------------------------*/
+
+/**
+* @brief Initializes the user button with interrupt.
+*
+* @param None
+* @retval None
+*/
 void BSP_Button_Init(void) {
 
-    __HAL_RCC_GPIOC_CLK_ENABLE();   // bouton sur GPIOC
-
     GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+	/* Enable GPIO clock for button */
+    __HAL_RCC_GPIOC_CLK_ENABLE();
+
+    /* Configure button pin as external interrupt */
     GPIO_InitStruct.Pin = GPIO_PIN_13;
     GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
+    /* Enable and configure EXTI interrupt */
     HAL_NVIC_SetPriority(EXTI15_10_IRQn, 2, 0);
     HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 }
 
-// ======================
-//        I2C
-// ======================
+/* I2C -----------------------------------------------------------------------*/
 
+/**
+* @brief Initializes I2C bus for sensor communication.
+*
+* @param None
+* @retval None
+*/
 void BSP_I2C_Init(void) {
-	__HAL_RCC_GPIOB_CLK_ENABLE();
-	__HAL_RCC_I2C1_CLK_ENABLE();
-
     GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+    /* Enable clocks for GPIO and I2C */
+    __HAL_RCC_GPIOB_CLK_ENABLE();
+    __HAL_RCC_I2C1_CLK_ENABLE();
+
+    /* Configure I2C SCL/SDA pins */
     GPIO_InitStruct.Pin       = GPIO_PIN_6 | GPIO_PIN_7;
     GPIO_InitStruct.Mode      = GPIO_MODE_AF_OD;
     GPIO_InitStruct.Pull      = GPIO_NOPULL;
     GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;
     GPIO_InitStruct.Alternate = GPIO_AF4_I2C1;
-
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-    hi2c1.Instance = I2C1;
-    hi2c1.Init.ClockSpeed = 400000; // ou 400000
-    hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
-    hi2c1.Init.OwnAddress1 = 0;
-    hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+    /* Configure I2C peripheral */
+    hi2c1.Instance             = I2C1;
+    hi2c1.Init.ClockSpeed      = 400000;
+    hi2c1.Init.DutyCycle       = I2C_DUTYCYCLE_2;
+    hi2c1.Init.AddressingMode  = I2C_ADDRESSINGMODE_7BIT;
     hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
-    hi2c1.Init.OwnAddress2 = 0;
+    hi2c1.Init.OwnAddress1     = 0;
+    hi2c1.Init.OwnAddress2     = 0;
     hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
-    hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+    hi2c1.Init.NoStretchMode   = I2C_NOSTRETCH_DISABLE;
 
     HAL_I2C_Init(&hi2c1);
 }
 
+/**
+* @brief Reads data from an I2C device register.
+*
+* @param devAddr Device I2C address
+* @param regAddr Register address
+* @param data    Pointer to receive buffer
+* @param len     Number of bytes to read
+* @retval HAL status
+*/
 HAL_StatusTypeDef BSP_I2C_Read(uint16_t devAddr,
                                uint8_t regAddr,
                                uint8_t *data,
@@ -138,6 +215,15 @@ HAL_StatusTypeDef BSP_I2C_Read(uint16_t devAddr,
             I2C_MEMADD_SIZE_8BIT, data, len, HAL_MAX_DELAY);
 }
 
+/**
+* @brief Writes data to an I2C device register.
+*
+* @param devAddr Device I2C address
+* @param regAddr Register address
+* @param data    Pointer to transmit buffer
+* @param len     Number of bytes to write
+* @retval HAL status
+*/
 HAL_StatusTypeDef BSP_I2C_Write(uint16_t devAddr,
                                 uint8_t regAddr,
                                 uint8_t *data,
@@ -147,29 +233,51 @@ HAL_StatusTypeDef BSP_I2C_Write(uint16_t devAddr,
             I2C_MEMADD_SIZE_8BIT, data, len, HAL_MAX_DELAY);
 }
 
-void BSP_I2C_TestBMP280(void)
-{
-    uint8_t id = 0;
-    if (HAL_I2C_IsDeviceReady(&hi2c1, BMP280_ADDR << 1, 1, 100) == HAL_OK) {
-            BSP_UART_Send((uint8_t*)"OK\r\n", 4);
-        } else {
-            BSP_UART_Send((uint8_t*)"NOK\r\n", 4);
-        }
-    HAL_Delay(500);
+/* CAN -----------------------------------------------------------------------*/
 
-    if (BSP_I2C_Read(BMP280_ADDR, 0xD0, &id, 1) == HAL_OK) {
-        char msg[32];
-        sprintf(msg, "BMP280 ID = 0x%02X\r\n", id);
-        BSP_UART_Send((uint8_t *)msg, strlen(msg));
+/**
+* @brief Sends a CAN frame using STM32 HAL.
+*
+* This function is responsible for:
+*            - Preparing an extended CAN identifier
+*            - Waiting for a free transmit mailbox
+*            - Transmitting the CAN frame
+*
+* @param can_id Extended CAN identifier
+* @param data   Pointer to payload data
+* @param len    Payload length in bytes
+* @retval None
+*/
+void BSP_CAN_SendFrame(uint32_t can_id, const uint8_t *data, uint8_t len)
+{
+    CAN_TxHeaderTypeDef header;
+    uint32_t mailbox;
+
+    /* DroneCAN uses 29-bit extended identifiers */
+    header.IDE = CAN_ID_EXT;
+    header.ExtId = can_id & 0x1FFFFFFF;
+    header.RTR = CAN_RTR_DATA;
+    header.DLC = len;
+    header.TransmitGlobalTime = DISABLE;
+
+    /* Wait until a transmit mailbox is available */
+    while (HAL_CAN_GetTxMailboxesFreeLevel(&hcan1) == 0)
+    {
+        // wait
     }
-    else {
-        BSP_UART_Send((uint8_t *)"I2C error\r\n", 11);
-    }
+
+    /* Submit frame to CAN peripheral */
+    HAL_CAN_AddTxMessage(&hcan1, &header, data, &mailbox);
 }
 
-// ======================
-//   INTERRUPT HANDLER
-// ======================
+/* INTERRUPTS -----------------------------------------------------------------------*/
+
+/**
+* @brief GPIO EXTI callback.
+*
+* @param GPIO_Pin GPIO pin number
+* @retval None
+*/
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
     if (GPIO_Pin == GPIO_PIN_13) {
         BSP_LED_Toggle();
