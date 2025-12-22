@@ -1,0 +1,3 @@
+[submodule "Middlewares/libcanard"]
+	path = Middlewares/libcanard
+	url = https://github.com/DroneCAN/libcanard

@@ -1,98 +1,73 @@
-/* USER CODE BEGIN Header */
-/**
-  ******************************************************************************
-  * @file           : main.c
-  * @brief          : Main program body
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2025 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
-/* USER CODE END Header */
+/******************************************************************************
+* @file    main.c
+* @brief   Main application entry point
+*
+*          This file contains system initialization, RTOS startup,
+*          peripheral configuration, and task creation.
+*
+*          Application responsibilities:
+*            - Sensor acquisition (BMP280)
+*            - CAN bus transmission (raw CAN + DroneCAN)
+*            - System scheduling using CMSIS-RTOS
+*
+* @board   Custom STM32F446RE board
+* @author  Alexandre Panhaleux
+******************************************************************************/
+
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "cmsis_os.h"
 
 /* Private includes ----------------------------------------------------------*/
-/* USER CODE BEGIN Includes */
 #include "bsp.h"
 #include "bmp280.h"
 #include <stdio.h>
 #include <string.h>
+#include "dronecan.h"
 
-/* USER CODE END Includes */
 
-/* Private typedef -----------------------------------------------------------*/
-/* USER CODE BEGIN PTD */
-/* USER CODE END PTD */
+/* DroneCAN node configuration------------------------------------------------*/
+#define DRONECAN_NODE_ID        42
+#define DRONECAN_NODE_NAME     "com.alexandrepanhaleux.bmp280"
+#define DRONECAN_CAN_BITRATE   500000
 
-/* Private define ------------------------------------------------------------*/
-/* USER CODE BEGIN PD */
 
-/* USER CODE END PD */
 
-/* Private macro -------------------------------------------------------------*/
-/* USER CODE BEGIN PM */
-#define MSG_SIZE 64
-/* USER CODE END PM */
-
-/* Private variables ---------------------------------------------------------*/
-
-I2C_HandleTypeDef hi2c1;
-
-UART_HandleTypeDef huart2;
-
-//osThreadId LedTaskHandle;
+/* RTOS tasks handles --------------------------------------------------------*/
 osThreadId SensorTaskHandle;
-//osThreadId LoggerTaskHandle;
-
-
-/* USER CODE BEGIN PV */
-BMP280 dev;
-
 osThreadId CanTaskHandle;
 
-CAN_TxHeaderTypeDef TxHeader;
-uint32_t txMailbox;
-CAN_HandleTypeDef hcan1;
-uint8_t txData[8] = {0};
+/* Application devices / driver instances ------------------------------------*/
+BMP280 dev;
 
-//data struct to collect sensor samples
+/* CAN peripheral handle -----------------------------------------------------*/
+CAN_HandleTypeDef hcan1;
+
+/* I2C peripheral handle ---------------------------------------------------------*/
+I2C_HandleTypeDef hi2c1;
+
+/* UART peripheral handle ---------------------------------------------------------*/
+UART_HandleTypeDef huart2;
+
+/* Shared sensor data structure : written by the SensorTask and read by the CanTask */
 typedef struct
 {
     float temperature_c;
     float pressure_hpa;
     uint32_t timestamp_ms;
-    uint8_t valid;
-    osMutexId mutex;
+    uint8_t valid;			/* Indicates that at least one valid sample exists */
+    osMutexId mutex;		/* Protects concurrent access */
 } SensorData_t;
 
 static SensorData_t g_sensorData;
 
-/* USER CODE END PV */
 
-/* Private function prototypes -----------------------------------------------*/
+/* RTOS tasks prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_CAN1_Init(void);
-//void StartLedTask(void const * argument);
 void StartSensorTask(void const * argument);
-
-//void StartLoggerTask(void const * argument);
-
-/* USER CODE BEGIN PFP */
 void StartCanTask(void const * argument);
-/* USER CODE END PFP */
 
-/* Private user code ---------------------------------------------------------*/
-/* USER CODE BEGIN 0 */
-/* USER CODE END 0 */
 
 /**
   * @brief  The application entry point.
@@ -101,95 +76,51 @@ void StartCanTask(void const * argument);
 int main(void)
 {
 
-  /* USER CODE BEGIN 1 */
-
-  /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
 
-  /* USER CODE BEGIN Init */
-
-  /* USER CODE END Init */
 
   /* Configure the system clock */
   SystemClock_Config();
 
-  /* USER CODE BEGIN SysInit */
 
-  /* USER CODE END SysInit */
+  /* ------------------------------------------------------------------------
+   * Peripheral initialization
+   * ------------------------------------------------------------------------ */
+  MX_CAN1_Init();		/* Initialize CAN peripheral */
+  BSP_Init();			/* Board-level peripherals */
+  BMP280_Init(&dev);	/* Sensor initialization */
+  DroneCAN_Init(DRONECAN_NODE_ID);
 
-  /* Initialize all configured peripherals */
-  MX_CAN1_Init();
-  /* USER CODE BEGIN 2 */
-  TxHeader.StdId = 0x123;
-  TxHeader.IDE = CAN_ID_STD;
-  TxHeader.RTR = CAN_RTR_DATA;
-  TxHeader.DLC = 1;
-  /* board support package code initialization */
-  BSP_Init();
-
-  BMP280_Init(&dev);
-
-
-  BSP_I2C_TestBMP280();
-
-
-  /* USER CODE END 2 */
-
-  /* USER CODE BEGIN RTOS_MUTEX */
+  /* ------------------------------------------------------------------------
+   * RTOS object creation
+   * ------------------------------------------------------------------------ */
   osMutexDef(SENSOR_DATA_MUTEX);
   g_sensorData.mutex = osMutexCreate(osMutex(SENSOR_DATA_MUTEX));
-  /* USER CODE END RTOS_MUTEX */
 
-  /* USER CODE BEGIN RTOS_SEMAPHORES */
-  /* add semaphores, ... */
-  /* USER CODE END RTOS_SEMAPHORES */
-
-  /* USER CODE BEGIN RTOS_TIMERS */
-  /* start timers, add new ones, ... */
-  /* USER CODE END RTOS_TIMERS */
-
-  /* USER CODE BEGIN RTOS_QUEUES */
-  /* USER CODE END RTOS_QUEUES */
-
-  /* Create the thread(s) */
-  /* definition and creation of LedTask */
-  /*osThreadDef(LedTask, StartLedTask, osPriorityLow, 0, 128);
-  LedTaskHandle = osThreadCreate(osThread(LedTask), NULL);*/
+  /* ------------------------------------------------------------------------
+   * Task creation
+   * ------------------------------------------------------------------------ */
 
   /* definition and creation of SensorTask */
   osThreadDef(SensorTask, StartSensorTask, osPriorityNormal, 0, 256);
   SensorTaskHandle = osThreadCreate(osThread(SensorTask), &g_sensorData);
 
-
-  /* definition and creation of LoggerTask */
-  /*osThreadDef(LoggerTask, StartLoggerTask, osPriorityBelowNormal, 0, 256);
-  LoggerTaskHandle = osThreadCreate(osThread(LoggerTask), NULL);*/
-
-  /* USER CODE BEGIN RTOS_THREADS */
   /* definition and creation of CanTask */
   osThreadDef(CanTask, StartCanTask, osPriorityBelowNormal, 0, 256);
-  SensorTaskHandle = osThreadCreate(osThread(CanTask), &g_sensorData);
-  /* USER CODE END RTOS_THREADS */
+  CanTaskHandle = osThreadCreate(osThread(CanTask), &g_sensorData);
 
-  /* Start scheduler */
+  /* Start RTOS scheduler */
   osKernelStart();
 
-  /* We should never get here as control is now taken by the scheduler */
-
   /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
   while (1)
   {
 
-    /* USER CODE END WHILE */
-
-    /* USER CODE BEGIN 3 */
   }
-  /* USER CODE END 3 */
 }
 
 /**
@@ -247,13 +178,6 @@ void SystemClock_Config(void)
 static void MX_CAN1_Init(void)
 {
 
-  /* USER CODE BEGIN CAN1_Init 0 */
-
-  /* USER CODE END CAN1_Init 0 */
-
-  /* USER CODE BEGIN CAN1_Init 1 */
-
-  /* USER CODE END CAN1_Init 1 */
   hcan1.Instance = CAN1;
   hcan1.Init.Prescaler = 6;
   hcan1.Init.Mode = CAN_MODE_NORMAL;
@@ -266,54 +190,29 @@ static void MX_CAN1_Init(void)
   hcan1.Init.AutoRetransmission = DISABLE;
   hcan1.Init.ReceiveFifoLocked = DISABLE;
   hcan1.Init.TransmitFifoPriority = DISABLE;
+
   if (HAL_CAN_Init(&hcan1) != HAL_OK)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN CAN1_Init 2 */
   HAL_CAN_Start(&hcan1);
-  /* USER CODE END CAN1_Init 2 */
-
 }
 
 
 
-
-/* USER CODE BEGIN 4 */
-
-/* USER CODE END 4 */
-
-/* USER CODE BEGIN Header_StartLedTask */
-/**
-  * @brief  Function implementing the LedTask thread.
-  * @param  argument: Not used
-  * @retval None
-  */
-/* USER CODE END Header_StartLedTask */
-//void StartLedTask(void const * argument)
-//{
-//  /* USER CODE BEGIN 5 */
-//  /* Infinite loop */
-//  for(;;)
-//  {
-//      BSP_LED_Toggle();
-//      osDelay(500);
-//  }
-//  /* USER CODE END 5 */
-//}
-
-/* USER CODE BEGIN Header_StartSensorTask */
 /**
 * @brief Function implementing the SensorTask thread.
-* @param argument: Not used
+* This task is responsible for:
+*            - Acquiring temperature and pressure from the BMP280
+*            - Updating the shared sensor structure
+*           - Timestamp measurements
+* @param argument: argument Pointer to shared SensorData_t structure
 * @retval None
 */
-/* USER CODE END Header_StartSensorTask */
 void StartSensorTask(void const * argument)
 {
-  /* USER CODE BEGIN StartSensorTask */
 	char msg[64];
-    //sensor data struct
+    /*sensor data struct*/
     SensorData_t *data = (SensorData_t *)argument;
 
     for(;;)
@@ -336,96 +235,51 @@ void StartSensorTask(void const * argument)
         else {
             snprintf(msg, sizeof(msg), "BMP280 ERROR\n");
         }
-
+        /* Sensor sampling period */
         osDelay(2000);
     }
-  /* USER CODE END StartSensorTask */
 }
 
-
+/**
+ * @brief  CAN / DroneCAN transmission task
+ *
+ *         This task:
+ *           - Reads the latest sensor values (thread-safe)
+ *           - Publishes pressure and temperature using DroneCAN
+ *           - Sends periodic heartbeat messages
+ *
+ * @param  argument Pointer to shared SensorData_t structure
+ */
 void StartCanTask(void const * argument)
 {
     SensorData_t *shared = (SensorData_t *)argument;
-    SensorData_t local;   // local copy (stack)
+    SensorData_t local;   /* Local copy to minimize mutex hold time */
 
-    uint8_t txData[8];
-
-    CAN_TxHeaderTypeDef header = {
-        .StdId = 0x100,
-        .IDE   = CAN_ID_STD,
-        .RTR   = CAN_RTR_DATA,
-        .DLC   = 8
-    };
-
-    uint32_t mailbox;
 
     for (;;)
     {
+    	/* Copy shared data atomically */
         osMutexWait(shared->mutex, osWaitForever);
-        local = *shared;              // STRUCT COPY
+        local = *shared;
         osMutexRelease(shared->mutex);
 
         if (local.valid)
         {
-        	int16_t temp = (int16_t)(local.temperature_c * 100);
-        	uint16_t pres = (uint16_t)(local.pressure_hpa * 10);
-        	uint32_t ts = local.timestamp_ms;
 
-            txData[0] = temp >> 8;
-            txData[1] = temp & 0xFF;
-            txData[2] = pres >> 8;
-            txData[3] = pres & 0xFF;
-            txData[4] = ts >> 24;
-            txData[5] = ts >> 16;
-            txData[6] = ts >> 8;
-            txData[7] = ts & 0xFF;
+            DroneCAN_SendPressure(local.pressure_hpa);
 
-            /*char msg[64];
-            snprintf(msg, sizeof(msg),
-                     "[CAN] T=%.2f P=%.2f ts=%lu\r\n",
-                     local.temperature_c,
-                     local.pressure_hpa,
-                     local.timestamp_ms);
+            DroneCAN_SendTemperature(local.temperature_c);
 
-            BSP_UART_Send((uint8_t*)msg, strlen(msg));*/
         }
 
-        HAL_CAN_AddTxMessage(&hcan1, &header, txData, &mailbox);
+        /* Publish node heartbeat */
+        DroneCAN_SendHeartbeat();
 
-        osDelay(2000);
+        /* Transmission period */
+        osDelay(1000);
     }
 }
 
-
-/* USER CODE BEGIN Header_StartLoggerTask */
-/**
-* @brief Function implementing the LoggerTask thread.
-* @param argument: Not used
-* @retval None
-*/
-/* USER CODE END Header_StartLoggerTask */
-//void StartLoggerTask(void const * argument)
-//{
-//  /* USER CODE BEGIN StartLoggerTask */
-//    char msg[64];
-//
-//    for(;;)
-//    {
-//        if (xQueueReceive(sensorQueue, msg, portMAX_DELAY) == pdTRUE)
-//        {
-//            BSP_UART_Send((uint8_t*)msg, strlen(msg));
-//        }
-//
-//        txData[0]++;
-//        if (HAL_CAN_AddTxMessage(&hcan1, &TxHeader, txData, &txMailbox) == HAL_OK) {
-//            BSP_UART_Send((uint8_t*)"CAN TX OK\r\n", 11);
-//        } else {
-//            BSP_UART_Send((uint8_t*)"CAN TX FAIL\r\n", 13);
-//        }
-//        osDelay(1000);
-//    }
-//  /* USER CODE END StartLoggerTask */
-//}
 
 /**
   * @brief  This function is executed in case of error occurrence.
