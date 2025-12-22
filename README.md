@@ -31,7 +31,7 @@ The firmware uses **CMSIS-RTOS (FreeRTOS)**, a small **BSP layer** to isolate HA
 |   └── Third party/              # Free RTOS stack  
 
 
----
+---  
 
 
 ## Build & Run Instructions
@@ -47,31 +47,31 @@ The firmware uses **CMSIS-RTOS (FreeRTOS)**, a small **BSP layer** to isolate HA
 
 1. **Open STM32CubeIDE**
 2. **Import the project**:
-  - `File → Import → Existing Projects into Workspace` → select this repo’s root folder.
+  - `File → Import → Existing Projects into Workspace` → select this repo’s root folder.  
 3. **Build and flash**:
 
 
 ## How It Works
 
-This project is structured like a real embedded application:
-	•	clean separation between BSP, sensor driver, and application
-	•	periodic publishing using RTOS scheduling
-	•	shared sensor state protected by a mutex
+This project is structured like a real embedded application:  
+	•	clean separation between BSP, sensor driver, and application  
+	•	periodic publishing using RTOS scheduling  
+	•	shared sensor state protected by a mutex  
 
 ### Main Concept
 
-1) Sensor acquisition (BMP280)
-	•	Reads raw registers over I2C
-	•	Applies Bosch compensation formulas
-	•	Produces engineering units:
-	•	Temperature: °C
-	•	Pressure: hPa
+1) Sensor acquisition (BMP280)  
+	•	Reads raw registers over I2C  
+	•	Applies Bosch compensation formulas  
+	•	Produces engineering units:  
+	•	Temperature: °C  
+	•	Pressure: hPa  
 
-2) Shared state
-A SensorData_t structure is updated by the SensorTask and read by the CanTask.  
+2) Shared state  
+A SensorData_t structure is updated by the SensorTask and read by the CanTask.   
 
-3) DroneCAN publishing (libcanard)
-The CanTask publishes:
-	•	uavcan.node.Heartbeat (uptime, health, mode)
-	•	Pressure (float, Pa)
-	•	Temperature (float, K)
+3) DroneCAN publishing (libcanard)  
+The CanTask publishes:  
+	•	uavcan.node.Heartbeat (uptime, health, mode)  
+	•	Pressure (float, Pa)  
+	•	Temperature (float, K)  
