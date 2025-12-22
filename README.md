@@ -75,3 +75,9 @@ The CanTask publishes:
 	•	uavcan.node.Heartbeat (uptime, health, mode)  
 	•	Pressure (float, Pa)  
 	•	Temperature (float, K)  
+
+## License & Credits
+
+	- Main application code: MIT
+	- Third-party: 
+		libcanard / DroneCAN stack: see submodule license inside Middlewares/libcanard/
