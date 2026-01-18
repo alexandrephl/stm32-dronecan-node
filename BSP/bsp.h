@@ -16,6 +16,7 @@
 #define BSP_H
 
 #include <stdint.h>
+#include <stdbool.h>
 #include "stm32f4xx_hal.h"
 
 /*global handles*/
@@ -51,5 +52,6 @@ void BSP_I2C_TestBMP280(void);
 
 /*CAN*/
 void BSP_CAN_SendFrame(uint32_t can_id, const uint8_t *data, uint8_t len);
+bool BSP_CAN_ReceiveFrame(uint32_t* can_id_out, uint8_t* data_out, uint8_t* len_out);
 
 #endif

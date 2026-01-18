@@ -35,6 +35,15 @@
 #define UAVCAN_TEMPERATURE_ID        1028
 #define UAVCAN_TEMPERATURE_SIGNATURE 0x4A2F9D4F0C1F5B6EULL
 
+#define UAVCAN_LATENCY_PING_ID        20001
+#define UAVCAN_LATENCY_PING_SIGNATURE 0xABCDEF0123456789ULL  // Fake, but needs to be unique
+
+#define UAVCAN_RTT_PING_ID        20002
+#define UAVCAN_RTT_PING_SIGNATURE 0xCAFEBABE12345678ULL
+
+#define LATENCY_PING_DATA_TYPE_ID   78   // example unused ID
+#define LATENCY_PING_SIGNATURE     0x123456789ABCDEF0ULL  // any random 64-bit
+
 /* Static module state ----------------------------------------------------*/
 static uint8_t heartbeat_tid = 0;				/* Transfer-ID counters */
 static uint8_t canard_memory[CANARD_MEM_SIZE];	/* libcanard memory arena */
@@ -55,16 +64,25 @@ static bool should_accept_transfer(
     CanardTransferType transfer_type,
     uint8_t source_node_id)
 {
-    (void)ins;
-    (void)data_type_id;
-    (void)source_node_id;
-
-    if (transfer_type == CanardTransferTypeBroadcast)
-    {
-        *out_data_type_signature = 0;	/* Not used */
-        return true;
-    }
+	if (transfer_type == CanardTransferTypeBroadcast)
+	    {
+	        if (data_type_id == LATENCY_PING_DATA_TYPE_ID)
+	        {
+	            *out_data_type_signature = LATENCY_PING_SIGNATURE;
+	            return true;
+	        }
+	    }
     return false;
+}
+
+/**
+ * @brief Return current system time in microseconds
+ *
+ * @note  Used by libcanard for transfer timing and deadlines.
+ */
+static uint64_t get_time_usec(void)
+{
+    return ((uint64_t)HAL_GetTick()) * 1000ULL;
 }
 
 /**
@@ -78,19 +96,58 @@ static void on_transfer_received(
     CanardRxTransfer* transfer)
 {
     (void)ins;
-    (void)transfer;
+
+    /* Example: latency ping echo */
+    if (transfer->data_type_id == LATENCY_PING_DATA_TYPE_ID)
+    {
+        if (transfer->payload_len >= sizeof(uint32_t))
+        {
+            uint32_t sent_ms;
+            memcpy(&sent_ms, transfer->payload_head, sizeof(sent_ms));
+
+            // Get current STM32 time
+            uint32_t recv_ms = HAL_GetTick();
+
+            uint8_t payload[8];
+            memcpy(payload, &sent_ms, 4);
+            memcpy(payload + 4, &recv_ms, 4);
+            /* Echo back same timestamp */
+            DroneCAN_SendLatencyPing(payload, 8);
+        }
+    }
+
+    /* Add other message handlers here later */
 }
 
-
-/**
- * @brief Return current system time in microseconds
- *
- * @note  Used by libcanard for transfer timing and deadlines.
- */
-static uint64_t get_time_usec(void)
+void DroneCAN_ProcessRx(void)
 {
-    return ((uint64_t)HAL_GetTick()) * 1000ULL;
+    uint32_t can_id;
+    uint8_t data[8];
+    uint8_t len;
+
+    while (BSP_CAN_ReceiveFrame(&can_id, data, &len))
+    {
+
+        CanardCANFrame frame;
+
+        frame.id = can_id;
+        frame.data_len = len;
+        memcpy(frame.data, data, len);
+
+        osDelay(1);
+
+        /* Feed frame into libcanard */
+        canardHandleRxFrame(
+            &canard,
+            &frame,
+            get_time_usec()
+        );
+
+    }
 }
+
+
+
 
 /* Public API ------------------------------------------------------------*/
 
@@ -245,6 +302,42 @@ void DroneCAN_SendTemperature(float temperature_c)
             frame->data_len
         );
 
+        canardPopTxQueue(&canard);
+    }
+}
+
+
+/**
+ * @brief Publish latency ping (timestamp)
+ *
+ * Message: com.alexandrepanhaleux.ping
+ *
+ * @param timestamp_ms  Timestamp in milliseconds (from HAL_GetTick)
+ * @retval None
+ */
+void DroneCAN_SendLatencyPing(const uint8_t* payload, uint8_t len)
+{
+    static uint8_t ping_tid = 0;
+
+    const int16_t res = canardBroadcast(
+        &canard,
+        UAVCAN_LATENCY_PING_SIGNATURE,
+        UAVCAN_LATENCY_PING_ID,
+        &ping_tid,
+        CANARD_TRANSFER_PRIORITY_LOW,
+        payload,
+        len
+    );
+
+    if (res < 0)
+    {
+        return;
+    }
+
+    const CanardCANFrame* frame;
+    while ((frame = canardPeekTxQueue(&canard)) != NULL)
+    {
+        BSP_CAN_SendFrame(frame->id, frame->data, frame->data_len);
         canardPopTxQueue(&canard);
     }
 }

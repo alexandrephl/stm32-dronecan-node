@@ -25,10 +25,12 @@ extern "C" {
 /* Exported functions --------------------------------------------------------*/
 /* Initialization */
 void DroneCAN_Init(uint8_t node_id);
+void DroneCAN_ProcessRx(void);
 
 /* Publishers */
 void DroneCAN_SendHeartbeat(void);
 void DroneCAN_SendPressure(float pressure_hpa);
 void DroneCAN_SendTemperature(float temperature_c);
+void DroneCAN_SendLatencyPing(const uint8_t* payload, uint8_t len);
 
 #endif /* INC_DRONECAN_H_ */

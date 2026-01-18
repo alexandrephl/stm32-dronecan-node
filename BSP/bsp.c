@@ -18,6 +18,8 @@
 #include <stdio.h>
 #include <string.h>
 #include "main.h"
+#include <stdbool.h>
+
 
 /* External peripherals handles */
 extern CAN_HandleTypeDef hcan1;
@@ -26,6 +28,7 @@ extern I2C_HandleTypeDef hi2c1;
 
 /* Private define ------------------------------------------------------------*/
 #define BMP280_ADDR  0x76   // SDO = GND -> addr 0x76
+#define CANARD_CAN_FRAME_EFF 0x80000000;
 
 /* BSP INIT ------------------------------------------------------------------*/
 
@@ -268,6 +271,29 @@ void BSP_CAN_SendFrame(uint32_t can_id, const uint8_t *data, uint8_t len)
 
     /* Submit frame to CAN peripheral */
     HAL_CAN_AddTxMessage(&hcan1, &header, data, &mailbox);
+}
+
+bool BSP_CAN_ReceiveFrame(uint32_t* can_id_out, uint8_t* data_out, uint8_t* len_out)
+{
+    CAN_RxHeaderTypeDef header;
+    uint8_t data[8];
+
+    if (HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO0) == 0)
+        return false;
+
+    if (HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &header, data) != HAL_OK)
+        return false;
+
+    if (header.IDE == CAN_ID_EXT){
+        *can_id_out = header.ExtId | CANARD_CAN_FRAME_EFF;
+    }
+    else
+        *can_id_out = header.StdId;
+
+    *len_out = header.DLC;
+    memcpy(data_out, data, *len_out);
+
+    return true;
 }
 
 /* INTERRUPTS -----------------------------------------------------------------------*/
